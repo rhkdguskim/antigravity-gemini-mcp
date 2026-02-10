@@ -3,15 +3,19 @@
  * Handles Cloud Code API calls
  */
 
+import crypto from 'crypto';
 import {
     API_ENDPOINTS,
     API_HEADERS,
-    CLIENT_METADATA,
     DEFAULT_MAX_TOKENS,
     GEMINI_MAX_OUTPUT_TOKENS,
+    DEFAULT_PROJECT_ID,
     isThinkingModel,
     getModelFamily
 } from './constants.js';
+
+// Antigravity system instruction (minimal version)
+const SYSTEM_INSTRUCTION = 'You are a helpful AI assistant.';
 
 /**
  * Build request headers
@@ -28,20 +32,8 @@ function buildHeaders(token, acceptType = 'application/json') {
 /**
  * Convert messages to Cloud Code format
  */
-function convertMessages(messages, systemPrompt = null) {
+function convertMessages(messages) {
     const contents = [];
-
-    // Add system prompt as first user message if provided
-    if (systemPrompt) {
-        contents.push({
-            role: 'user',
-            parts: [{ text: `[System]: ${systemPrompt}` }]
-        });
-        contents.push({
-            role: 'model',
-            parts: [{ text: 'Understood. I will follow these instructions.' }]
-        });
-    }
 
     for (const msg of messages) {
         const role = msg.role === 'assistant' ? 'model' : 'user';
@@ -54,7 +46,6 @@ function convertMessages(messages, systemPrompt = null) {
                 if (block.type === 'text') {
                     parts.push({ text: block.text });
                 } else if (block.type === 'image') {
-                    // Handle image content
                     parts.push({
                         inlineData: {
                             mimeType: block.source?.media_type || 'image/png',
@@ -74,9 +65,9 @@ function convertMessages(messages, systemPrompt = null) {
 }
 
 /**
- * Build Cloud Code request payload
+ * Build Cloud Code request payload with wrapper
  */
-function buildRequest(options) {
+function buildRequest(options, projectId) {
     const {
         model,
         messages,
@@ -88,10 +79,10 @@ function buildRequest(options) {
         thinking
     } = options;
 
-    const contents = convertMessages(messages, system);
+    const contents = convertMessages(messages);
 
-    const payload = {
-        model,
+    // Build inner request object
+    const innerRequest = {
         contents,
         generationConfig: {
             maxOutputTokens: Math.min(maxTokens, GEMINI_MAX_OUTPUT_TOKENS)
@@ -100,21 +91,43 @@ function buildRequest(options) {
 
     // Add optional parameters
     if (temperature !== undefined) {
-        payload.generationConfig.temperature = temperature;
+        innerRequest.generationConfig.temperature = temperature;
     }
     if (topP !== undefined) {
-        payload.generationConfig.topP = topP;
+        innerRequest.generationConfig.topP = topP;
     }
     if (topK !== undefined) {
-        payload.generationConfig.topK = topK;
+        innerRequest.generationConfig.topK = topK;
     }
 
     // Enable thinking for supported models
     if (thinking?.type === 'enabled' && isThinkingModel(model)) {
-        payload.generationConfig.thinkingConfig = {
-            thinkingBudget: thinking.budget_tokens || 10000
+        innerRequest.generationConfig.thinkingConfig = {
+            includeThoughts: true,
+            thinkingBudget: thinking.budget_tokens || 16000
         };
     }
+
+    // Build system instruction
+    const systemParts = [{ text: SYSTEM_INSTRUCTION }];
+    if (system) {
+        systemParts.push({ text: system });
+    }
+
+    innerRequest.systemInstruction = {
+        role: 'user',
+        parts: systemParts
+    };
+
+    // Wrap in Cloud Code envelope
+    const payload = {
+        project: projectId || DEFAULT_PROJECT_ID,
+        model: model,
+        request: innerRequest,
+        userAgent: 'antigravity',
+        requestType: 'agent',
+        requestId: 'agent-' + crypto.randomUUID()
+    };
 
     return payload;
 }
@@ -152,13 +165,11 @@ function parseResponse(data, model) {
     // Parse content parts
     for (const part of candidate.content?.parts || []) {
         if (part.thought) {
-            // Thinking block
             result.content.push({
                 type: 'thinking',
                 thinking: part.thought
             });
         } else if (part.text) {
-            // Text block
             result.content.push({
                 type: 'text',
                 text: part.text
@@ -172,8 +183,8 @@ function parseResponse(data, model) {
 /**
  * Generate content using Gemini API
  */
-export async function generateContent(token, options) {
-    const payload = buildRequest(options);
+export async function generateContent(token, options, projectId = null) {
+    const payload = buildRequest(options, projectId);
     const model = options.model;
     const useStreaming = isThinkingModel(model);
 
@@ -203,16 +214,16 @@ export async function generateContent(token, options) {
             }
 
             if (useStreaming) {
-                // Parse SSE response and accumulate
                 return await parseSSEResponse(response, model);
             }
 
             const data = await response.json();
-            return parseResponse(data, model);
+            // Unwrap response if wrapped
+            const responseData = data.response || data;
+            return parseResponse(responseData, model);
 
         } catch (error) {
             lastError = error;
-            // Don't retry on client errors
             if (error.message?.includes('400') || error.message?.includes('invalid')) {
                 throw error;
             }
@@ -245,13 +256,11 @@ async function parseSSEResponse(response, model) {
         try {
             const data = JSON.parse(line.slice(6));
 
-            // Update usage
             if (data.usageMetadata) {
                 result.usage.input_tokens = data.usageMetadata.promptTokenCount || 0;
                 result.usage.output_tokens = data.usageMetadata.candidatesTokenCount || 0;
             }
 
-            // Accumulate content
             const candidate = data.candidates?.[0];
             if (candidate?.content?.parts) {
                 for (const part of candidate.content.parts) {
@@ -263,7 +272,6 @@ async function parseSSEResponse(response, model) {
                 }
             }
 
-            // Check finish reason
             if (candidate?.finishReason) {
                 const reasonMap = {
                     'STOP': 'end_turn',
@@ -277,7 +285,6 @@ async function parseSSEResponse(response, model) {
         }
     }
 
-    // Build final content
     if (thinkingText) {
         result.content.push({ type: 'thinking', thinking: thinkingText });
     }
@@ -308,7 +315,6 @@ export async function listModels(token, projectId = null) {
             const data = await response.json();
             if (!data.models) continue;
 
-            // Filter to Gemini models only
             const models = Object.entries(data.models)
                 .filter(([id]) => getModelFamily(id) === 'gemini')
                 .map(([id, info]) => ({

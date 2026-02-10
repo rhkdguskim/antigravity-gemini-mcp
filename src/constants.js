@@ -86,6 +86,9 @@ export const API_HEADERS = {
 // Token cache TTL (5 minutes)
 export const TOKEN_CACHE_TTL_MS = 5 * 60 * 1000;
 
+// Default project ID (fallback)
+export const DEFAULT_PROJECT_ID = 'rising-fact-p41fc';
+
 // Default max tokens for generation
 export const DEFAULT_MAX_TOKENS = 8192;
 

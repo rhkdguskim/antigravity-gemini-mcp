@@ -180,6 +180,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             case 'gemini_generate': {
                 const account = selectAccount(accounts);
                 const token = await getAccessToken(account);
+                const projectId = getProjectId(account);
 
                 const result = await generateContent(token, {
                     model: args.model || 'gemini-3-flash',
@@ -188,7 +189,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     maxTokens: args.max_tokens || 8192,
                     temperature: args.temperature,
                     thinking: args.thinking !== false ? { type: 'enabled' } : undefined
-                });
+                }, projectId);
 
                 // Format response
                 let response = '';
@@ -219,6 +220,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             case 'gemini_chat': {
                 const account = selectAccount(accounts);
                 const token = await getAccessToken(account);
+                const projectId = getProjectId(account);
 
                 const result = await generateContent(token, {
                     model: args.model || 'gemini-3-flash',
@@ -226,7 +228,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     system: args.system,
                     maxTokens: args.max_tokens || 8192,
                     thinking: args.thinking !== false ? { type: 'enabled' } : undefined
-                });
+                }, projectId);
 
                 // Format response
                 let response = '';
