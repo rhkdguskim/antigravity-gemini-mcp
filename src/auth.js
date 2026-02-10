@@ -1,10 +1,10 @@
 /**
  * Authentication module
- * Reuses Antigravity accounts and OAuth refresh logic
+ * Handles token management and account selection
  */
 
-import { readFileSync, existsSync } from 'fs';
-import { ACCOUNTS_CONFIG_PATH, OAUTH_CONFIG, TOKEN_CACHE_TTL_MS } from './constants.js';
+import { getEnabledAccounts } from './accounts.js';
+import { OAUTH_CONFIG, TOKEN_CACHE_TTL_MS } from './constants.js';
 
 // Token cache: email -> { accessToken, expiresAt }
 const tokenCache = new Map();
@@ -23,18 +23,14 @@ export function parseRefreshParts(refresh) {
 }
 
 /**
- * Load accounts from Antigravity config
+ * Load enabled accounts
  */
 export function loadAccounts() {
-    if (!existsSync(ACCOUNTS_CONFIG_PATH)) {
-        throw new Error(`Antigravity accounts not found at ${ACCOUNTS_CONFIG_PATH}. Please run 'antigravity-claude-proxy accounts add' first.`);
+    const accounts = getEnabledAccounts();
+    if (accounts.length === 0) {
+        throw new Error('No accounts configured. Run: antigravity-gemini-mcp accounts add');
     }
-
-    const data = JSON.parse(readFileSync(ACCOUNTS_CONFIG_PATH, 'utf-8'));
-    const accounts = data.accounts || [];
-
-    // Filter enabled accounts
-    return accounts.filter(acc => acc.enabled !== false && !acc.isInvalid);
+    return accounts;
 }
 
 /**

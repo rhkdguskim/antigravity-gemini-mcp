@@ -6,11 +6,20 @@
 import { homedir, platform, arch } from 'os';
 import { join } from 'path';
 
-// Antigravity accounts config path
-export const ACCOUNTS_CONFIG_PATH = join(
+// Config directory
+export const CONFIG_DIR = join(homedir(), '.config/antigravity-gemini-mcp');
+
+// Accounts config path (own config, with fallback to antigravity-proxy)
+export const ACCOUNTS_CONFIG_PATH = join(CONFIG_DIR, 'accounts.json');
+
+// Fallback to antigravity-proxy accounts if own config doesn't exist
+export const FALLBACK_ACCOUNTS_PATH = join(
     homedir(),
     '.config/antigravity-proxy/accounts.json'
 );
+
+// OAuth callback port
+export const OAUTH_CALLBACK_PORT = 51321;
 
 // Cloud Code API endpoints (in fallback order)
 export const API_ENDPOINTS = [
@@ -22,7 +31,16 @@ export const API_ENDPOINTS = [
 export const OAUTH_CONFIG = {
     clientId: '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com',
     clientSecret: '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',
-    tokenUrl: 'https://oauth2.googleapis.com/token'
+    authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+    tokenUrl: 'https://oauth2.googleapis.com/token',
+    userInfoUrl: 'https://www.googleapis.com/oauth2/v1/userinfo',
+    scopes: [
+        'https://www.googleapis.com/auth/cloud-platform',
+        'https://www.googleapis.com/auth/userinfo.email',
+        'https://www.googleapis.com/auth/userinfo.profile',
+        'https://www.googleapis.com/auth/cclog',
+        'https://www.googleapis.com/auth/experimentsandconfigs'
+    ]
 };
 
 // IDE Type enum

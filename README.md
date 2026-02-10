@@ -4,52 +4,86 @@ MCP (Model Context Protocol) server that provides access to Google Gemini models
 
 ## Features
 
-- Uses existing Antigravity account configuration (no separate setup needed)
-- Multi-account support with automatic rotation
-- Supports all Gemini models including thinking models (gemini-3-pro-high, gemini-3-flash, etc.)
-- Native MCP integration with Claude Code
+- **Independent account management** - Add Google accounts directly (no external dependencies)
+- **Multi-account support** - Automatic rotation for rate limit handling
+- **Supports all Gemini models** - Including thinking models (gemini-3-pro-high, gemini-3-flash, etc.)
+- **Native MCP integration** - Works seamlessly with Claude Code
+- **Fallback compatibility** - Can use existing antigravity-proxy accounts
 
-## Prerequisites
+## Quick Start
 
-1. **Antigravity Claude Proxy** must be installed and configured with at least one Google account:
-
-```bash
-npm install -g antigravity-claude-proxy
-antigravity-claude-proxy accounts add
-```
-
-## Installation
-
-### Option 1: Install globally
+### 1. Install
 
 ```bash
 npm install -g antigravity-gemini-mcp
 ```
 
-### Option 2: Install from source
+Or install from source:
 
 ```bash
-git clone https://github.com/yourusername/antigravity-gemini-mcp.git
+git clone https://github.com/rhkdguskim/antigravity-gemini-mcp.git
 cd antigravity-gemini-mcp
 npm install
 npm link
 ```
 
-## Usage with Claude Code
-
-Add to your Claude Code MCP configuration:
+### 2. Add Google Account
 
 ```bash
-claude mcp add antigravity-gemini -- npx antigravity-gemini-mcp
+antigravity-gemini-mcp accounts add
 ```
 
-Or if installed globally:
+This will open a browser for Google OAuth authentication.
+
+### 3. Register with Claude Code
 
 ```bash
 claude mcp add antigravity-gemini -- antigravity-gemini-mcp
 ```
 
-## Available Tools
+## CLI Commands
+
+```bash
+# Add a Google account (opens browser for OAuth)
+antigravity-gemini-mcp accounts add
+
+# List configured accounts
+antigravity-gemini-mcp accounts list
+
+# Remove an account
+antigravity-gemini-mcp accounts remove [email]
+
+# Start MCP server (used by Claude Code)
+antigravity-gemini-mcp
+
+# Show help
+antigravity-gemini-mcp help
+```
+
+## Multi-Account Support
+
+You can add multiple Google accounts for automatic rotation:
+
+```bash
+# Add first account
+antigravity-gemini-mcp accounts add
+# → user1@gmail.com
+
+# Add second account
+antigravity-gemini-mcp accounts add
+# → user2@gmail.com
+
+# Add more accounts...
+antigravity-gemini-mcp accounts add
+# → user3@gmail.com
+```
+
+Benefits of multiple accounts:
+- Automatic rotation when rate limited
+- Higher aggregate quota
+- Improved reliability
+
+## Available MCP Tools
 
 ### gemini_generate
 
@@ -92,7 +126,7 @@ Get detailed quota information for all models.
 
 ### gemini_list_accounts
 
-List configured Antigravity accounts.
+List configured accounts.
 
 ## Supported Models
 
@@ -107,13 +141,17 @@ List configured Antigravity accounts.
 
 ## Configuration
 
-The MCP server uses the same account configuration as `antigravity-claude-proxy`:
+Accounts are stored in:
+```
+~/.config/antigravity-gemini-mcp/accounts.json
+```
 
+### Fallback Support
+
+If no accounts are configured, the server will automatically use accounts from `antigravity-claude-proxy` if available:
 ```
 ~/.config/antigravity-proxy/accounts.json
 ```
-
-No additional configuration is needed.
 
 ## Architecture
 
@@ -129,15 +167,17 @@ No additional configuration is needed.
 │                  ▼                           │
 │    ┌─────────────────────────┐              │
 │    │ antigravity-gemini-mcp  │              │
-│    │  ├── auth.js (OAuth)    │              │
-│    │  ├── api.js (Gemini)    │              │
+│    │  ├── accounts.js        │              │
+│    │  ├── oauth.js           │              │
+│    │  ├── auth.js            │              │
+│    │  ├── api.js             │              │
 │    │  └── index.js (MCP)     │              │
 │    └────────────┬────────────┘              │
 │                 │                            │
 │                 ▼                            │
 │    ┌─────────────────────────┐              │
 │    │  accounts.json          │              │
-│    │  (Antigravity config)   │              │
+│    │  (own config)           │              │
 │    └────────────┬────────────┘              │
 │                 │                            │
 │                 ▼                            │
@@ -156,7 +196,22 @@ No additional configuration is needed.
 | Setup | ANTHROPIC_BASE_URL | claude mcp add |
 | Port | 8080 (configurable) | None (stdio) |
 | Models | Claude + Gemini | Gemini only |
-| Integration | Environment vars | MCP tools |
+| Account Management | Built-in | Built-in |
+| Dependencies | None | None |
+
+## Troubleshooting
+
+### "No accounts configured"
+
+Run `antigravity-gemini-mcp accounts add` to add a Google account.
+
+### OAuth fails to open browser
+
+Copy the URL from the terminal and open it manually in your browser.
+
+### Rate limited
+
+Add more Google accounts with `antigravity-gemini-mcp accounts add`.
 
 ## License
 
