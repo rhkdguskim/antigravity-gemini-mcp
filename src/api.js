@@ -254,7 +254,12 @@ async function parseSSEResponse(response, model) {
         if (!line.startsWith('data: ')) continue;
 
         try {
-            const data = JSON.parse(line.slice(6));
+            let data = JSON.parse(line.slice(6));
+
+            // Unwrap response if wrapped
+            if (data.response) {
+                data = data.response;
+            }
 
             if (data.usageMetadata) {
                 result.usage.input_tokens = data.usageMetadata.promptTokenCount || 0;
@@ -266,7 +271,7 @@ async function parseSSEResponse(response, model) {
                 for (const part of candidate.content.parts) {
                     if (part.thought) {
                         thinkingText += part.thought;
-                    } else if (part.text) {
+                    } else if (part.text && part.text.length > 0) {
                         responseText += part.text;
                     }
                 }
