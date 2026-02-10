@@ -107,6 +107,9 @@ export const TOKEN_CACHE_TTL_MS = 5 * 60 * 1000;
 // Default project ID (fallback)
 export const DEFAULT_PROJECT_ID = 'rising-fact-p41fc';
 
+// Antigravity system instruction (required for some models)
+export const ANTIGRAVITY_SYSTEM_INSTRUCTION = `You are Antigravity, a powerful agentic AI coding assistant designed by the Google Deepmind team working on Advanced Agentic Coding.You are pair programming with a USER to solve their coding task. The task may require creating a new codebase, modifying or debugging an existing codebase, or simply answering a question.**Absolute paths only****Proactiveness**`;
+
 // Default max tokens for generation
 export const DEFAULT_MAX_TOKENS = 8192;
 

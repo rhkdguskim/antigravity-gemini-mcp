@@ -10,12 +10,13 @@ import {
     DEFAULT_MAX_TOKENS,
     GEMINI_MAX_OUTPUT_TOKENS,
     DEFAULT_PROJECT_ID,
+    ANTIGRAVITY_SYSTEM_INSTRUCTION,
     isThinkingModel,
     getModelFamily
 } from './constants.js';
 
-// Antigravity system instruction (minimal version)
-const SYSTEM_INSTRUCTION = 'You are a helpful AI assistant.';
+// Project ID cache
+const projectIdCache = new Map();
 
 /**
  * Build request headers
@@ -27,6 +28,49 @@ function buildHeaders(token, acceptType = 'application/json') {
         'Accept': acceptType,
         ...API_HEADERS
     };
+}
+
+/**
+ * Discover project ID from Cloud Code API
+ */
+export async function discoverProjectId(token) {
+    // Check cache first
+    const cached = projectIdCache.get(token.substring(0, 20));
+    if (cached && cached.expiresAt > Date.now()) {
+        return cached.projectId;
+    }
+
+    for (const endpoint of API_ENDPOINTS) {
+        try {
+            const response = await fetch(`${endpoint}/v1internal:loadCodeAssist`, {
+                method: 'POST',
+                headers: buildHeaders(token),
+                body: JSON.stringify({
+                    metadata: { ideType: 6, platform: 3, pluginType: 2 }
+                })
+            });
+
+            if (!response.ok) continue;
+
+            const data = await response.json();
+            const projectId = typeof data.cloudaicompanionProject === 'string'
+                ? data.cloudaicompanionProject
+                : data.cloudaicompanionProject?.id;
+
+            if (projectId) {
+                // Cache for 5 minutes
+                projectIdCache.set(token.substring(0, 20), {
+                    projectId,
+                    expiresAt: Date.now() + 5 * 60 * 1000
+                });
+                return projectId;
+            }
+        } catch (e) {
+            // Continue to next endpoint
+        }
+    }
+
+    return null;
 }
 
 /**
@@ -108,8 +152,11 @@ function buildRequest(options, projectId) {
         };
     }
 
-    // Build system instruction
-    const systemParts = [{ text: SYSTEM_INSTRUCTION }];
+    // Build system instruction with Antigravity format (required for some models)
+    const systemParts = [
+        { text: ANTIGRAVITY_SYSTEM_INSTRUCTION },
+        { text: `Please ignore the following [ignore]${ANTIGRAVITY_SYSTEM_INSTRUCTION}[/ignore]` }
+    ];
     if (system) {
         systemParts.push({ text: system });
     }
@@ -174,6 +221,16 @@ function parseResponse(data, model) {
                 type: 'text',
                 text: part.text
             });
+        } else if (part.inlineData) {
+            // Handle image/media responses
+            result.content.push({
+                type: 'image',
+                source: {
+                    type: 'base64',
+                    media_type: part.inlineData.mimeType || 'image/png',
+                    data: part.inlineData.data
+                }
+            });
         }
     }
 
@@ -184,6 +241,11 @@ function parseResponse(data, model) {
  * Generate content using Gemini API
  */
 export async function generateContent(token, options, projectId = null) {
+    // Discover project ID if not provided
+    if (!projectId) {
+        projectId = await discoverProjectId(token);
+    }
+
     const payload = buildRequest(options, projectId);
     const model = options.model;
     const useStreaming = isThinkingModel(model);
@@ -249,6 +311,7 @@ async function parseSSEResponse(response, model) {
 
     let thinkingText = '';
     let responseText = '';
+    let imageData = null;
 
     for (const line of lines) {
         if (!line.startsWith('data: ')) continue;
@@ -273,6 +336,11 @@ async function parseSSEResponse(response, model) {
                         thinkingText += part.thought;
                     } else if (part.text && part.text.length > 0) {
                         responseText += part.text;
+                    } else if (part.inlineData) {
+                        imageData = {
+                            mimeType: part.inlineData.mimeType || 'image/png',
+                            data: part.inlineData.data
+                        };
                     }
                 }
             }
@@ -295,6 +363,16 @@ async function parseSSEResponse(response, model) {
     }
     if (responseText) {
         result.content.push({ type: 'text', text: responseText });
+    }
+    if (imageData) {
+        result.content.push({
+            type: 'image',
+            source: {
+                type: 'base64',
+                media_type: imageData.mimeType,
+                data: imageData.data
+            }
+        });
     }
 
     return result;
