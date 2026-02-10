@@ -1,0 +1,33 @@
+{
+  "name": "antigravity-gemini-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Gemini API using Antigravity authentication",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "antigravity-gemini-mcp": "./bin/cli.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "gemini",
+    "antigravity",
+    "claude",
+    "ai"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "src",
+    "bin"
+  ]
+}
